@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"bytes"
 )
 
 // Error logging level
@@ -29,9 +30,25 @@ func Logf(level int, format string, a ...interface{}) {
 }
 
 // LogResponse ... log response
-func LogResponse(res http.Response, body []byte) {
-	bodyString := string(body)
-	message := fmt.Sprintf("Response for [%s]: Status: %s. Body: %s", res.Request.URL.String(), strconv.Itoa(res.StatusCode), bodyString)
+func LogResponse(res *http.Response, logBody bool) {
+	bodyString := ""
+	bodyBytes, _ := ioutil.ReadAll(res.Body)
+	// Restore the io.ReadCloser to its original state
+	res.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	// Use the content
+	bodyString += string(bodyBytes)
+
+	headersString := ""
+	for k, v := range res.Header {
+		headersString = headersString + fmt.Sprintf("[key:%s value:%s] ", k, v)
+	}
+
+	var message string
+	if logBody && len(bodyString) > 0 {
+		message = fmt.Sprintf("Response for [%s]: Status: %s. Headers: %s. Body: %s", res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString, bodyString)
+	} else {
+		message = fmt.Sprintf("Response for [%s]: Status: %s. Headers: %s.", res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString)
+	}
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		Log(LogLevelDefault, message)
 	} else {
@@ -46,8 +63,12 @@ func LogRequest(req *http.Request, logBody bool) {
 		headersString = headersString + fmt.Sprintf("[key:%s value:%s] ", k, v)
 	}
 	message := fmt.Sprintf("Request started: %s [%s]: Headers: %s.", req.Method, req.URL.String(), headersString)
-	if logBody {
-		body, err := ioutil.ReadAll(req.Body)
+	if logBody && req.Body != nil {
+		reader, err := req.GetBody()
+		if err != nil {
+			Logf(LogLevelError, "Cant parse response %s.", err.Error())
+		}
+		body, err := ioutil.ReadAll(reader)
 		if err != nil {
 			Logf(LogLevelError, "Cant parse response %s.", err.Error())
 		}
