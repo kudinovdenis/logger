@@ -12,7 +12,9 @@ import (
 // Error logging level
 const (
 	LogLevelError   = iota
-	LogLevelDefault = iota
+	LogLevelDefault
+	LogLevelFromService
+	LogLevelToService
 )
 
 // Log ... Append custom log identifier: [E!], [ ]
@@ -21,6 +23,10 @@ func Log(level int, s string) {
 		fmt.Println("[E!] " + s)
 	} else if level == LogLevelDefault {
 		fmt.Println("[ ] " + s)
+	} else if level == LogLevelFromService {
+		fmt.Println("[<-] " + s)
+	} else if level == LogLevelToService {
+		fmt.Println("[->] " + s)
 	}
 }
 
@@ -30,8 +36,8 @@ func Logf(level int, format string, a ...interface{}) {
 	Log(level, message)
 }
 
-// LogResponse ... log response
-func LogResponse(res *http.Response, logBody bool) {
+// logResponse ... log response
+func logResponse(res *http.Response, logBody bool, from bool) {
 	headersString := ""
 	for k, v := range res.Header {
 		headersString = headersString + fmt.Sprintf("[key:%s value:%s] ", k, v)
@@ -40,26 +46,38 @@ func LogResponse(res *http.Response, logBody bool) {
 	var message string
 	save, reader, err := drainBody(res.Body)
 	bodyBytes, _ := ioutil.ReadAll(reader)
+	res.Body = save
 	if logBody && len(bodyBytes) > 0 {
 		if err != nil {
 			Logf(LogLevelError, "Cant parse response %s.", err.Error())
 		}
 		bodyString := ""
-		res.Body = save
 		bodyString += string(bodyBytes)
 		message = fmt.Sprintf("Response for [%s]: Status: %s. Headers: %s. Body: %s", res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString, bodyString)
 	} else {
 		message = fmt.Sprintf("Response for [%s]: Status: %s. Headers: %s.", res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString)
 	}
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
-		Log(LogLevelDefault, message)
+		if from {
+			Log(LogLevelFromService, message)
+		} else {
+			Log(LogLevelToService, message)
+		}
 	} else {
 		Log(LogLevelError, message)
 	}
 }
 
-// LogRequest ... log request
-func LogRequest(req *http.Request, logBody bool) {
+func LogResponseToService(res *http.Response, logBody bool) {
+	logResponse(res, logBody, false)
+}
+
+func LogResponseFromService(res *http.Response, logBody bool) {
+	logResponse(res, logBody, true)
+}
+
+// logRequest ... log request
+func logRequest(req *http.Request, logBody bool, from bool) {
 	headersString := ""
 	for k, v := range req.Header {
 		headersString = headersString + fmt.Sprintf("[key:%s value:%s] ", k, v)
@@ -78,7 +96,19 @@ func LogRequest(req *http.Request, logBody bool) {
 		message += fmt.Sprintf(" Body: %s", bodyString)
 		req.Body = save
 	}
-	Log(LogLevelDefault, message)
+	if from {
+		Log(LogLevelFromService, message)
+	} else {
+		Log(LogLevelToService, message)
+	}
+}
+
+func LogRequestToService(req *http.Request, logBody bool) {
+	logRequest(req, logBody, false)
+}
+
+func LogRequestFromService(req *http.Request, logBody bool) {
+	logRequest(req, logBody, true)
 }
 
 func drainBody(b io.ReadCloser) (r1, r2 io.ReadCloser, err error) {
