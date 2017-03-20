@@ -53,9 +53,9 @@ func logResponse(res *http.Response, logBody bool, from bool) {
 		}
 		bodyString := ""
 		bodyString += string(bodyBytes)
-		message = fmt.Sprintf("Response for [%s]: Status: %s. Headers: %s. Body: %s", res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString, bodyString)
+		message = fmt.Sprintf("Response for %s [%s]: Status: %s. Headers: %s. Body: %s", res.Request.Method, res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString, bodyString)
 	} else {
-		message = fmt.Sprintf("Response for [%s]: Status: %s. Headers: %s.", res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString)
+		message = fmt.Sprintf("Response for %s [%s]: Status: %s. Headers: %s.", res.Request.Method, res.Request.URL.String(), strconv.Itoa(res.StatusCode), headersString)
 	}
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		if from {
