@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"bytes"
+	"time"
 )
 
 // Error logging level
@@ -17,27 +18,41 @@ const (
 	LogLevelToService
 )
 
+type Logger struct {
+	module string
+}
+
 // Log ... Append custom log identifier: [E!], [ ]
-func Log(level int, s string) {
+func (logger *Logger) Log(level int, s string) {
+	t := time.Now()
+	timeString := t.Format("2006/01/02 15:04:05.000")
 	if level == LogLevelError {
-		fmt.Println("[E!] " + s)
+		fmt.Println(timeString + " [E] " + logger.module + ": "  + s)
 	} else if level == LogLevelDefault {
-		fmt.Println("[ ] " + s)
+		fmt.Println(timeString + " [I] " + logger.module + ": "  + s)
 	} else if level == LogLevelFromService {
-		fmt.Println("[<-] " + s)
+		fmt.Println(timeString + " [<-] " + logger.module + ": "  + s)
 	} else if level == LogLevelToService {
-		fmt.Println("[->] " + s)
+		fmt.Println(timeString + " [->] " + logger.module + ": "  + s)
 	}
 }
 
+func New(module string) *Logger {
+	return &Logger{module: module}
+}
+
+func ChildLogger(logger *Logger, module string) *Logger {
+	return &Logger{module: logger.module + "->" + module}
+}
+
 // Logf ... Custom logging with format. Append custom log identifier: [E!], [ ]
-func Logf(level int, format string, a ...interface{}) {
+func (logger *Logger) Logf(level int, format string, a ...interface{}) {
 	message := fmt.Sprintf(format, a...)
-	Log(level, message)
+	logger.Log(level, message)
 }
 
 // logResponse ... log response
-func logResponse(res *http.Response, logBody bool, from bool) {
+func (logger *Logger) logResponse(res *http.Response, logBody bool, from bool) {
 	headersString := ""
 	for k, v := range res.Header {
 		headersString = headersString + fmt.Sprintf("[key:%s value:%s] ", k, v)
@@ -47,11 +62,11 @@ func logResponse(res *http.Response, logBody bool, from bool) {
 	if logBody && res.Body != nil {
 		save, reader, err := readersFromReader(res.Body)
 		if err != nil {
-			Logf(LogLevelError, "Cant parse response %s.", err.Error())
+			logger.Logf(LogLevelError, "Cant parse response %s.", err.Error())
 		}
 		body, err := ioutil.ReadAll(reader)
 		if err != nil {
-			Logf(LogLevelError, "Cant parse response %s.", err.Error())
+			logger.Logf(LogLevelError, "Cant parse response %s.", err.Error())
 		}
 		bodyString := string(body[:])
 		message += fmt.Sprintf(" Body: %s", bodyString)
@@ -61,25 +76,25 @@ func logResponse(res *http.Response, logBody bool, from bool) {
 
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		if from {
-			Log(LogLevelFromService, message)
+			logger.Log(LogLevelFromService, message)
 		} else {
-			Log(LogLevelToService, message)
+			logger.Log(LogLevelToService, message)
 		}
 	} else {
-		Log(LogLevelError, message)
+		logger.Log(LogLevelError, message)
 	}
 }
 
-func LogResponseToService(res *http.Response, logBody bool) {
-	logResponse(res, logBody, false)
+func (logger *Logger) LogResponseToService(res *http.Response, logBody bool) {
+	logger.logResponse(res, logBody, false)
 }
 
-func LogResponseFromService(res *http.Response, logBody bool) {
-	logResponse(res, logBody, true)
+func (logger *Logger) LogResponseFromService(res *http.Response, logBody bool) {
+	logger.logResponse(res, logBody, true)
 }
 
 // logRequest ... log request
-func logRequest(req *http.Request, logBody bool, from bool) {
+func (logger *Logger) logRequest(req *http.Request, logBody bool, from bool) {
 	headersString := ""
 	for k, v := range req.Header {
 		headersString = headersString + fmt.Sprintf("[key:%s value:%s] ", k, v)
@@ -88,11 +103,11 @@ func logRequest(req *http.Request, logBody bool, from bool) {
 	if logBody && req.Body != nil {
 		save, reader, err := readersFromReader(req.Body)
 		if err != nil {
-			Logf(LogLevelError, "Cant parse request %s.", err.Error())
+			logger.Logf(LogLevelError, "Cant parse request %s.", err.Error())
 		}
 		body, err := ioutil.ReadAll(reader)
 		if err != nil {
-			Logf(LogLevelError, "Cant parse requesr %s.", err.Error())
+			logger.Logf(LogLevelError, "Cant parse requesr %s.", err.Error())
 		}
 		bodyString := string(body[:])
 		message += fmt.Sprintf(" Body: %s", bodyString)
@@ -100,18 +115,18 @@ func logRequest(req *http.Request, logBody bool, from bool) {
 		req.Body = ioutil.NopCloser(save)
 	}
 	if from {
-		Log(LogLevelFromService, message)
+		logger.Log(LogLevelFromService, message)
 	} else {
-		Log(LogLevelToService, message)
+		logger.Log(LogLevelToService, message)
 	}
 }
 
-func LogRequestToService(req *http.Request, logBody bool) {
-	logRequest(req, logBody, false)
+func (logger *Logger) LogRequestToService(req *http.Request, logBody bool) {
+	logger.logRequest(req, logBody, false)
 }
 
-func LogRequestFromService(req *http.Request, logBody bool) {
-	logRequest(req, logBody, true)
+func (logger *Logger) LogRequestFromService(req *http.Request, logBody bool) {
+	logger.logRequest(req, logBody, true)
 }
 
 
